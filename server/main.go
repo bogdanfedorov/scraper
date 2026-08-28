@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -70,6 +71,45 @@ func handleGetVacancy(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, v)
 }
 
+func handleGetVacancyRaw(w http.ResponseWriter, r *http.Request) {
+	id := sanitizeID(r.PathValue("id"))
+	dir := repoDir(resolveUserID(r))
+
+	raw, err := loadVacancyRaw(dir, id)
+	if errors.Is(err, ErrNotFound) {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Write(raw)
+}
+
+func handleSaveVacancyRaw(w http.ResponseWriter, r *http.Request) {
+	id := sanitizeID(r.PathValue("id"))
+	if id == "" {
+		writeError(w, http.StatusBadRequest, errors.New("empty id"))
+		return
+	}
+
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	v := parseVacancy(raw)
+	dir := repoDir(resolveUserID(r))
+	if err := saveVacancy(dir, id, v); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, v)
+}
+
 func handleListVacancies(w http.ResponseWriter, r *http.Request) {
 	dir := repoDir(resolveUserID(r))
 	summaries, err := listVacancies(dir)
@@ -124,6 +164,8 @@ func newMux() *http.ServeMux {
 	mux.HandleFunc("GET /health", handleHealth)
 	mux.HandleFunc("PUT /vacancies/{id}", handleSaveVacancy)
 	mux.HandleFunc("GET /vacancies/{id}", handleGetVacancy)
+	mux.HandleFunc("GET /vacancies/{id}/raw", handleGetVacancyRaw)
+	mux.HandleFunc("PUT /vacancies/{id}/raw", handleSaveVacancyRaw)
 	mux.HandleFunc("GET /vacancies", handleListVacancies)
 	mux.HandleFunc("GET /vacancies/{id}/history", handleVacancyHistory)
 	mux.HandleFunc("GET /vacancies/{id}/history/{commit}", handleVacancyAtCommit)

@@ -53,11 +53,16 @@ func saveVacancy(dir, id string, v Vacancy) error {
 	return commitFile(dir, filename, message)
 }
 
-func loadVacancy(dir, id string) (Vacancy, error) {
+func loadVacancyRaw(dir, id string) ([]byte, error) {
 	raw, err := os.ReadFile(vacancyPath(dir, id))
 	if errors.Is(err, os.ErrNotExist) {
-		return Vacancy{}, ErrNotFound
+		return nil, ErrNotFound
 	}
+	return raw, err
+}
+
+func loadVacancy(dir, id string) (Vacancy, error) {
+	raw, err := loadVacancyRaw(dir, id)
 	if err != nil {
 		return Vacancy{}, err
 	}

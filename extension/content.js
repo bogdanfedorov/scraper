@@ -180,41 +180,139 @@ async function refreshSaveButtonState(adapter, button, previewButton) {
   }
 }
 
+function createEditorPanel() {
+  const panel = document.createElement("div");
+  panel.style.cssText =
+    "position:fixed;top:0;right:0;width:420px;height:100vh;z-index:100000;display:none;" +
+    "flex-direction:column;gap:8px;padding:12px;box-sizing:border-box;" +
+    "background:#1e1e1e;color:#eee;box-shadow:-2px 0 8px rgba(0,0,0,.4);font-family:monospace;";
+
+  const status = document.createElement("div");
+  status.style.cssText = "font-size:12px;color:#aaa;";
+
+  const textarea = document.createElement("textarea");
+  textarea.style.cssText =
+    "flex:1;width:100%;background:#111;color:#eee;border:1px solid #444;" +
+    "padding:8px;resize:none;font-family:monospace;font-size:13px;box-sizing:border-box;";
+
+  const actions = document.createElement("div");
+  actions.style.cssText = "display:flex;gap:8px;";
+
+  const commitBtn = document.createElement("button");
+  commitBtn.style.cssText =
+    "flex:1;padding:8px;background:#2ecc71;color:#000;border:none;border-radius:6px;cursor:pointer;";
+
+  const closeBtn = document.createElement("button");
+  closeBtn.style.cssText =
+    "padding:8px 12px;background:#555;color:#fff;border:none;border-radius:6px;cursor:pointer;";
+  closeBtn.addEventListener("click", () => {
+    panel.style.display = "none";
+  });
+
+  actions.appendChild(commitBtn);
+  actions.appendChild(closeBtn);
+  panel.appendChild(status);
+  panel.appendChild(textarea);
+  panel.appendChild(actions);
+  document.body.appendChild(panel);
+
+  return { panel, status, textarea, commitBtn, closeBtn };
+}
+
+async function openEditorPanel(editor, id) {
+  editor.panel.style.display = "flex";
+  editor.textarea.disabled = true;
+  editor.commitBtn.disabled = true;
+  editor.commitBtn.textContent = await t("editorCommitButton");
+  editor.closeBtn.textContent = await t("editorCloseButton");
+  editor.status.textContent = await t("editorLoading");
+
+  try {
+    const res = await browser.runtime.sendMessage({ type: "getServerVacancyRaw", id });
+    if (!res.exists) {
+      editor.status.textContent = await t("editorNotFound");
+      return;
+    }
+    editor.textarea.value = res.text;
+    editor.textarea.disabled = false;
+    editor.commitBtn.disabled = false;
+    editor.status.textContent = "";
+  } catch (err) {
+    editor.status.textContent = `${await t("serverSaveError")}: ${err.message}`;
+  }
+}
+
+async function commitEditorChanges(editor, id, adapter, serverBtn, previewBtn) {
+  editor.commitBtn.disabled = true;
+  editor.status.textContent = await t("editorCommitting");
+
+  try {
+    const { vacancy } = await browser.runtime.sendMessage({ type: "saveVacancyRaw", id, text: editor.textarea.value });
+    const hash = hashString(JSON.stringify({
+      id, title: vacancy.title, company: vacancy.company, description: vacancy.description, mails: vacancy.mails,
+    }));
+    await markVacancyServerSaved(location.href, { id, hash });
+    editor.status.textContent = await t("editorCommitted");
+    await refreshServerButtonState(adapter, serverBtn, previewBtn, editor);
+  } catch (err) {
+    editor.status.textContent = `${await t("serverSaveError")}: ${err.message}`;
+  } finally {
+    editor.commitBtn.disabled = false;
+  }
+}
+
+function setServerPreviewButton(previewBtn, entry, onOpen) {
+  if (!entry) {
+    previewBtn.style.display = "none";
+    previewBtn.onclick = null;
+    return;
+  }
+  previewBtn.style.display = "block";
+  previewBtn.onclick = () => onOpen(entry.id);
+}
+
 function serverPayload(adapter) {
   const { filename, content, title, company } = adapter.extractVacancy();
   if (!content) return null;
   return { id: filename, title, company, description: content, mails: extractMails(content) };
 }
 
-async function refreshServerButtonState(adapter, button) {
+async function refreshServerButtonState(adapter, button, previewBtn, editor) {
   const payload = serverPayload(adapter);
   if (!payload) {
     button.textContent = await t("noContent");
     setButtonStyle(button, SERVER_BUTTON_COLORS, "unsaved");
     button.disabled = true;
+    setServerPreviewButton(previewBtn, null);
     return;
   }
 
   const hash = hashString(JSON.stringify(payload));
   const serverSavedVacancies = await getServerSavedVacancies();
   const entry = serverSavedVacancies[location.href];
+  const onOpen = (id) => openEditorPanel(editor, id);
 
   if (entry && entry.hash === hash) {
     button.textContent = await t("alreadySavedToServer");
     setButtonStyle(button, SERVER_BUTTON_COLORS, "saved");
     button.disabled = true;
+    setServerPreviewButton(previewBtn, entry, onOpen);
   } else if (entry) {
     button.textContent = await t("changedSaveToServerButton");
     setButtonStyle(button, SERVER_BUTTON_COLORS, "changed");
     button.disabled = false;
+    setServerPreviewButton(previewBtn, entry, onOpen);
   } else {
     button.textContent = await t("saveToServerButton");
     setButtonStyle(button, SERVER_BUTTON_COLORS, "unsaved");
     button.disabled = false;
+    setServerPreviewButton(previewBtn, null);
   }
+
+  editor.commitBtn.onclick = () => commitEditorChanges(editor, payload.id, adapter, button, previewBtn);
 }
 
-async function saveCurrentVacancyToServer(adapter, button) {
+async function saveCurrentVacancyToServer(adapter, button, previewBtn, editor) {
   const payload = serverPayload(adapter);
   if (!payload) return;
 
@@ -225,7 +323,7 @@ async function saveCurrentVacancyToServer(adapter, button) {
     await browser.runtime.sendMessage({ type: "saveToServer", ...payload });
     await markVacancyServerSaved(location.href, { id: payload.id, hash: hashString(JSON.stringify(payload)) });
     button.textContent = await t("savedToServer");
-    setTimeout(() => refreshServerButtonState(adapter, button), 1500);
+    setTimeout(() => refreshServerButtonState(adapter, button, previewBtn, editor), 1500);
   } catch (err) {
     button.textContent = `${await t("serverSaveError")}: ${err.message}`;
     setButtonStyle(button, SERVER_BUTTON_COLORS, "error");
@@ -302,15 +400,25 @@ async function addButton(adapter) {
     "color:#fff;border:none;border-radius:6px;cursor:pointer;" +
     "font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3);";
 
-  await refreshServerButtonState(adapter, serverBtn);
+  const serverPreviewBtn = document.createElement("button");
+  serverPreviewBtn.style.cssText =
+    "position:fixed;top:230px;right:20px;z-index:99999;padding:8px 14px;display:none;" +
+    "background:#9b59b6;color:#fff;border:none;border-radius:6px;cursor:pointer;" +
+    "font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.3);";
+  serverPreviewBtn.textContent = await t("serverPreviewButton");
+
+  const editor = createEditorPanel();
+
+  await refreshServerButtonState(adapter, serverBtn, serverPreviewBtn, editor);
   serverBtn.addEventListener("click", () => {
     if (serverBtn.disabled) return;
-    saveCurrentVacancyToServer(adapter, serverBtn);
+    saveCurrentVacancyToServer(adapter, serverBtn, serverPreviewBtn, editor);
   });
 
   document.body.appendChild(btn);
   document.body.appendChild(previewBtn);
   document.body.appendChild(serverBtn);
+  document.body.appendChild(serverPreviewBtn);
 }
 
 (async () => {

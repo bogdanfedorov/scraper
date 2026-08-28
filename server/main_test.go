@@ -144,6 +144,50 @@ func TestHandleHistoryAndTimeline(t *testing.T) {
 	}
 }
 
+func TestHandleVacancyRawRoundTrip(t *testing.T) {
+	setTestConfig(t, "local")
+	mux := newMux()
+
+	doRequest(t, mux, http.MethodPut, "/vacancies/test-1", `{"status":"new","title":"T","company":"C","description":"d"}`, nil)
+
+	rec := doRequest(t, mux, http.MethodGet, "/vacancies/test-1/raw", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET raw status = %d, body = %s", rec.Code, rec.Body)
+	}
+	raw := rec.Body.String()
+	if !strings.Contains(raw, "Status: new") || !strings.Contains(raw, "Title: T") {
+		t.Fatalf("unexpected raw content: %q", raw)
+	}
+
+	edited := strings.Replace(raw, "Status: new", "Status: applied", 1)
+	rec = doRequest(t, mux, http.MethodPut, "/vacancies/test-1/raw", edited, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT raw status = %d, body = %s", rec.Code, rec.Body)
+	}
+	var v Vacancy
+	if err := json.Unmarshal(rec.Body.Bytes(), &v); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if v.Status != "applied" {
+		t.Fatalf("expected updated status, got %+v", v)
+	}
+
+	history, err := logForFile(cfg.StorageDir, "test-1.md")
+	if err != nil || len(history) != 2 {
+		t.Fatalf("expected 2 commits after raw edit, got %+v (err=%v)", history, err)
+	}
+}
+
+func TestHandleGetVacancyRawNotFound(t *testing.T) {
+	setTestConfig(t, "local")
+	mux := newMux()
+
+	rec := doRequest(t, mux, http.MethodGet, "/vacancies/missing/raw", "", nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+}
+
 func TestCloudModeIsolatesUsers(t *testing.T) {
 	setTestConfig(t, "cloud")
 	mux := newMux()

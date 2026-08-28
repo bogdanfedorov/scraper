@@ -48,10 +48,19 @@ browser.runtime.onMessage.addListener(async (msg) => {
     return { ok: true };
   }
 
-  if (msg.type === "getServerVacancy") {
-    const res = await backendFetch(`/vacancies/${encodeURIComponent(msg.id)}`);
+  if (msg.type === "getServerVacancyRaw") {
+    const res = await backendFetch(`/vacancies/${encodeURIComponent(msg.id)}/raw`);
     if (res.status === 404) return { exists: false };
-    return { exists: true, vacancy: await res.json() };
+    return { exists: true, text: await res.text() };
+  }
+
+  if (msg.type === "saveVacancyRaw") {
+    const res = await backendFetch(`/vacancies/${encodeURIComponent(msg.id)}/raw`, {
+      method: "PUT",
+      headers: { "Content-Type": "text/markdown" },
+      body: msg.text,
+    });
+    return { vacancy: await res.json() };
   }
 
   if (msg.type === "saveToServer") {
