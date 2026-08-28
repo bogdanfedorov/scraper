@@ -1,5 +1,4 @@
 registerAdapter({
-  id: "dou",
   label: "DOU (jobs.dou.ua)",
 
   match() {
@@ -10,17 +9,19 @@ registerAdapter({
     return /^\/vacancies\/?$/.test(location.pathname);
   },
 
-  moreButtonText: "Більше вакансій",
+  title() {
+    return document.getElementsByClassName("g-h2")[0]?.textContent.trim();
+  },
 
-  extractVacancy() {
-    const title = document.getElementsByClassName("g-h2")[0]?.textContent.trim() ?? "Без назви";
-    const company = (document.getElementsByClassName("l-n")[0]?.textContent ?? "")
-      .replace("Всі вакансії компанії", "")
-      .replace(/\s+/g, " ")
-      .trim();
+  company() {
+    return (document.getElementsByClassName("l-n")[0]?.textContent ?? "")
+          .replace("Всі вакансії компанії", "")
+          .replace(/\s+/g, " ")
+          .trim();
+  },
+
+  description() {
     const body = document.getElementsByClassName("l-vacancy")[0];
-    const bodyMd = body ? htmlToMarkdown(body).replace(/\n{3,}/g, "\n\n").trim() + "\n" : "";
-    const content = bodyMd ? `Посилання (відгукнутись): ${location.href}\n\n${bodyMd}` : "";
-    return { filename: sanitizeFilename(`${company} - ${title}`), content, title, company };
+    return body ? body.innerHTML.trim() : "";
   },
 });
