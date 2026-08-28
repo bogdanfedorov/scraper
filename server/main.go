@@ -115,8 +115,13 @@ func handleTimeline(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, commits)
 }
 
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 func newMux() *http.ServeMux {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", handleHealth)
 	mux.HandleFunc("PUT /vacancies/{id}", handleSaveVacancy)
 	mux.HandleFunc("GET /vacancies/{id}", handleGetVacancy)
 	mux.HandleFunc("GET /vacancies", handleListVacancies)
@@ -124,6 +129,19 @@ func newMux() *http.ServeMux {
 	mux.HandleFunc("GET /vacancies/{id}/history/{commit}", handleVacancyAtCommit)
 	mux.HandleFunc("GET /timeline", handleTimeline)
 	return mux
+}
+
+func withCORS(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-User-Id")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 func main() {
@@ -134,5 +152,5 @@ func main() {
 	}
 
 	log.Printf("vacancy-server listening on :%s (mode=%s, storage=%s)", cfg.Port, cfg.Mode, cfg.StorageDir)
-	log.Fatal(http.ListenAndServe(":"+cfg.Port, newMux()))
+	log.Fatal(http.ListenAndServe(":"+cfg.Port, withCORS(newMux())))
 }

@@ -11,6 +11,10 @@
   .path-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
   .path-row input { font-size: 14px; padding: 6px 8px; }
   .path-hint { font-size: 12px; color: #777; margin: 0; }
+  .connection-row { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; flex: none; }
+  .dot-ok { background: #2ecc71; }
+  .dot-error { background: #e74c3c; }
 </style>
 </head>
 <body>
@@ -26,6 +30,17 @@
   <label id="savePathLabel" for="savePath"></label>
   <input type="text" id="savePath">
   <p class="path-hint" id="savePathHint"></p>
+</div>
+
+<div class="path-row">
+  <label id="backendUrlLabel" for="backendUrl"></label>
+  <input type="text" id="backendUrl">
+  <p class="path-hint" id="backendUrlHint"></p>
+  <div class="connection-row">
+    <button id="checkConnection"></button>
+    <span class="dot" id="connectionDot"></span>
+    <span id="connectionMessage"></span>
+  </div>
 </div>
 
 <h1 id="adaptersHeading"></h1>

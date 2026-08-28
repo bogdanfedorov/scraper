@@ -7,6 +7,13 @@ const I18N_STRINGS = {
     savePathLabel: "Папка для збереження",
     savePathPlaceholder: "dou-vacancies",
     savePathHint: "Зберігається як підпапка всередині папки Завантажень браузера (браузери не дозволяють розширенням писати в довільне місце на диску).",
+    backendUrlLabel: "URL бекенда",
+    backendUrlPlaceholder: "http://localhost:8080",
+    backendUrlHint: "Адреса локального або хмарного vacancy-server.",
+    checkConnectionButton: "Перевірити з'єднання",
+    checkingConnection: "Перевіряю...",
+    connectionOk: "З'єднання успішне ✅",
+    connectionError: "Помилка з'єднання",
     saveButton: "💾 Зберегти вакансію в MD",
     saving: "Зберігаю...",
     saved: "Збережено ✅",
@@ -25,6 +32,13 @@ const I18N_STRINGS = {
     savePathLabel: "Save folder",
     savePathPlaceholder: "dou-vacancies",
     savePathHint: "Saved as a subfolder inside the browser's Downloads folder (extensions can't write to an arbitrary location on disk).",
+    backendUrlLabel: "Backend URL",
+    backendUrlPlaceholder: "http://localhost:8080",
+    backendUrlHint: "Address of the local or cloud vacancy-server.",
+    checkConnectionButton: "Check connection",
+    checkingConnection: "Checking...",
+    connectionOk: "Connection successful ✅",
+    connectionError: "Connection error",
     saveButton: "💾 Save vacancy to MD",
     saving: "Saving...",
     saved: "Saved ✅",
@@ -40,6 +54,7 @@ const I18N_STRINGS = {
 
 const I18N_DEFAULT_LOCALE = "uk";
 const DEFAULT_SAVE_PATH = "dou-vacancies";
+const DEFAULT_BACKEND_URL = "http://localhost:8080";
 
 function sanitizeSavePath(path) {
   const cleaned = String(path || "")
@@ -58,6 +73,19 @@ async function getSavePath() {
 
 async function setSavePath(path) {
   await browser.storage.local.set({ savePath: sanitizeSavePath(path) });
+}
+
+function sanitizeBackendUrl(url) {
+  return String(url || "").trim().replace(/\/+$/, "") || DEFAULT_BACKEND_URL;
+}
+
+async function getBackendUrl() {
+  const { backendUrl } = await browser.storage.local.get("backendUrl");
+  return sanitizeBackendUrl(backendUrl);
+}
+
+async function setBackendUrl(url) {
+  await browser.storage.local.set({ backendUrl: sanitizeBackendUrl(url) });
 }
 
 async function getLocale() {

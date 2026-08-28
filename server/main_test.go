@@ -49,6 +49,16 @@ func TestHandleSaveAndGetVacancy(t *testing.T) {
 	}
 }
 
+func TestHandleHealth(t *testing.T) {
+	setTestConfig(t, "local")
+	mux := newMux()
+
+	rec := doRequest(t, mux, http.MethodGet, "/health", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
 func TestHandleGetVacancyNotFound(t *testing.T) {
 	setTestConfig(t, "local")
 	mux := newMux()
