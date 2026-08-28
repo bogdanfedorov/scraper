@@ -2,10 +2,26 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+async function getSavedVacancies() {
+  const { savedVacancies = {} } = await browser.storage.local.get("savedVacancies");
+  return savedVacancies;
+}
+
+async function markVacancySaved(url, { filename, content }) {
+  const savedVacancies = await getSavedVacancies();
+  savedVacancies[url] = { filename, content, savedAt: Date.now() };
+  await browser.storage.local.set({ savedVacancies });
+}
+
+async function fileStillExists(filename) {
+  const { exists } = await browser.runtime.sendMessage({ type: "checkFileExists", filename });
+  return exists;
+}
+
 function sanitizeFilename(name) {
   return name.replace(/[\\/*?:"<>|]/g, "").replace(/\s+/g, " ").trim().slice(0, 150);
 }
-
+/**/
 function htmlToMarkdown(node) {
   let out = "";
   for (const child of node.childNodes) {
@@ -75,7 +91,78 @@ async function findEnabledAdapter() {
   return candidate;
 }
 
-async function saveCurrentVacancy(adapter, button) {
+const SAVE_BUTTON_COLORS = {
+  unsaved: "#2ecc71",
+  changed: "#f39c12",
+  saved: "#95a5a6",
+};
+
+function setSaveButtonStyle(button, colorKey) {
+  button.style.background = SAVE_BUTTON_COLORS[colorKey];
+  button.style.cursor = colorKey === "saved" ? "default" : "pointer";
+}
+
+function showPreviewModal(content) {
+  const overlay = document.createElement("div");
+  overlay.style.cssText =
+    "position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.5);" +
+    "display:flex;align-items:center;justify-content:center;";
+
+  const box = document.createElement("pre");
+  box.textContent = content;
+  box.style.cssText =
+    "max-width:80vw;max-height:80vh;overflow:auto;background:#fff;color:#111;" +
+    "padding:20px 24px;border-radius:8px;white-space:pre-wrap;font-size:13px;" +
+    "font-family:inherit;box-shadow:0 4px 24px rgba(0,0,0,.4);";
+
+  overlay.appendChild(box);
+  overlay.addEventListener("click", () => overlay.remove());
+  document.body.appendChild(overlay);
+}
+
+function setPreviewButton(previewButton, content) {
+  if (!content) {
+    previewButton.style.display = "none";
+    previewButton.onclick = null;
+    return;
+  }
+  previewButton.style.display = "block";
+  previewButton.onclick = () => showPreviewModal(content);
+}
+
+async function refreshSaveButtonState(adapter, button, previewButton) {
+  const { content } = adapter.extractVacancy();
+  if (!content) {
+    button.textContent = await t("noContent");
+    setSaveButtonStyle(button, "unsaved");
+    button.disabled = true;
+    setPreviewButton(previewButton, null);
+    return;
+  }
+
+  const savedVacancies = await getSavedVacancies();
+  const entry = savedVacancies[location.href];
+  const onDisk = entry ? await fileStillExists(entry.filename) : false;
+
+  if (onDisk && entry.content === content) {
+    button.textContent = await t("alreadySaved");
+    setSaveButtonStyle(button, "saved");
+    button.disabled = true;
+    setPreviewButton(previewButton, entry.content);
+  } else if (onDisk) {
+    button.textContent = await t("changedSaveButton");
+    setSaveButtonStyle(button, "changed");
+    button.disabled = false;
+    setPreviewButton(previewButton, entry.content);
+  } else {
+    button.textContent = await t("saveButton");
+    setSaveButtonStyle(button, "unsaved");
+    button.disabled = false;
+    setPreviewButton(previewButton, null);
+  }
+}
+
+async function saveCurrentVacancy(adapter, button, previewButton) {
   button.disabled = true;
   button.textContent = await t("saving");
 
@@ -87,11 +174,9 @@ async function saveCurrentVacancy(adapter, button) {
   }
 
   await browser.runtime.sendMessage({ type: "save", filename, content });
+  await markVacancySaved(location.href, { filename, content });
   button.textContent = await t("saved");
-  setTimeout(async () => {
-    button.textContent = await t("saveButton");
-    button.disabled = false;
-  }, 1500);
+  setTimeout(() => refreshSaveButtonState(adapter, button, previewButton), 1500);
 }
 
 function findMoreButton(adapter) {
@@ -123,12 +208,25 @@ async function addButton(adapter) {
   if (adapter.isListingPage()) {
     btn.textContent = await t("loadMoreButton");
     btn.addEventListener("click", () => loadAllVacancies(adapter, btn));
-  } else {
-    btn.textContent = await t("saveButton");
-    btn.addEventListener("click", () => saveCurrentVacancy(adapter, btn));
+    document.body.appendChild(btn);
+    return;
   }
 
+  const previewBtn = document.createElement("button");
+  previewBtn.style.cssText =
+    "position:fixed;top:130px;right:20px;z-index:99999;padding:8px 14px;display:none;" +
+    "background:#3498db;color:#fff;border:none;border-radius:6px;cursor:pointer;" +
+    "font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.3);";
+  previewBtn.textContent = await t("previewButton");
+
+  await refreshSaveButtonState(adapter, btn, previewBtn);
+  btn.addEventListener("click", () => {
+    if (btn.disabled) return;
+    saveCurrentVacancy(adapter, btn, previewBtn);
+  });
+
   document.body.appendChild(btn);
+  document.body.appendChild(previewBtn);
 }
 
 (async () => {
