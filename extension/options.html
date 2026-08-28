@@ -8,6 +8,9 @@
   h1 { font-size: 15px; margin: 0 0 12px; }
   label { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 14px; }
   .lang-row { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .path-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .path-row input { font-size: 14px; padding: 6px 8px; }
+  .path-hint { font-size: 12px; color: #777; margin: 0; }
 </style>
 </head>
 <body>
@@ -18,6 +21,13 @@
     <option value="en">English</option>
   </select>
 </div>
+
+<div class="path-row">
+  <label id="savePathLabel" for="savePath"></label>
+  <input type="text" id="savePath">
+  <p class="path-hint" id="savePathHint"></p>
+</div>
+
 <h1 id="adaptersHeading"></h1>
 <div id="list"></div>
 
