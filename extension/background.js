@@ -24,16 +24,12 @@ function backendQuery(path, body) {
   });
 }
 
-// The server has no lookup-by-id endpoint: it addresses vacancies by a
-// filename it derives from company + title + a hash of the description.
-// We find the current file by searching for the stable "company - title"
-// prefix, then fetch that file's own filename.
-async function findServerVacancy(id) {
-  const listRes = await backendQuery("/vacancies/list", { filename_filter: [id] });
+async function findServerVacancy(company, title) {
+  const listRes = await backendQuery("/vacancies/list", { company, title });
   if (listRes.status === 404) return null;
 
   const filenames = await listRes.json();
-  const filename = filenames.find((name) => name.startsWith(`${id} - `)) ?? filenames[0];
+  const filename = filenames[0];
   if (!filename) return null;
 
   const vacancyRes = await backendFetch(`/vacancies/${encodeURIComponent(filename)}`);
@@ -49,8 +45,6 @@ function saveVacancy(vacancy) {
   });
 }
 
-// Mirrors the server's Vacancy.EncodeToMD/ParseVacancy so the raw text shown
-// in the editor round-trips through the same header + blank-line format.
 function encodeVacancyRaw(v) {
   return `Status: ${v.status}\nTitle: ${v.title}\nCompany: ${v.company}\nURL: ${v.url}\n\n${v.description}\n`;
 }
@@ -91,11 +85,6 @@ browser.runtime.onMessage.addListener(async (msg) => {
   }
 
   if (msg.type === "openFile") {
-    // downloads.open() must be called directly from a user input handler, which
-    // a cross-context message listener never counts as (Firefox drops the
-    // "user activation" flag across the content-script -> background hop, and
-    // downloads.* isn't available in content scripts to call it there instead).
-    // downloads.show() has no such restriction, so we reveal the file instead.
     const match = await findSavedDownload(msg.filename);
     if (!match) return { ok: false };
 
@@ -104,7 +93,7 @@ browser.runtime.onMessage.addListener(async (msg) => {
   }
 
   if (msg.type === "getServerVacancyRaw") {
-    const found = await findServerVacancy(msg.id);
+    const found = await findServerVacancy(msg.company, msg.title);
     if (!found) return { exists: false };
     return { exists: true, text: encodeVacancyRaw(found.vacancy) };
   }
@@ -115,7 +104,7 @@ browser.runtime.onMessage.addListener(async (msg) => {
   }
 
   if (msg.type === "saveToServer") {
-    const found = await findServerVacancy(msg.id);
+    const found = await findServerVacancy(msg.company, msg.title);
     const status = found ? found.vacancy.status : "new";
 
     await saveVacancy({

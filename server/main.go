@@ -62,7 +62,8 @@ func handleSaveVacancy(w http.ResponseWriter, r *http.Request) {
 }
 
 type QueryVacancyRequest struct {
-	FileNameFilter []string `json:"filename_filter"`
+	Company string `json:"company"`
+	Title   string `json:"title"`
 }
 
 func handleListVacancies(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +79,7 @@ func handleListVacancies(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var filenames []string
-	if err := store.FindLike(&filenames, q.FileNameFilter); err != nil {
+	if err := store.FindLike(&filenames, q); err != nil {
 		if errors.Is(err, NotMatchingFilesFound) {
 			writeError(w, http.StatusNotFound, err)
 		} else {

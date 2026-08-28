@@ -4,8 +4,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"regexp"
 	"strings"
 )
+
+var filenameUnsafe = regexp.MustCompile(`[\\/:*?"<>|]`)
+
+func sanitizeFilenamePart(s string) string {
+	return strings.TrimSpace(filenameUnsafe.ReplaceAllString(s, " "))
+}
 
 type Vacancy struct {
 	Status      string `json:"status"`
@@ -23,7 +30,7 @@ func (v Vacancy) URLHash() string {
 }
 
 func (v Vacancy) Filename() string {
-	return v.Company + " - " + v.Title + " - " + v.URLHash() + ".md"
+	return sanitizeFilenamePart(v.Company) + " - " + sanitizeFilenamePart(v.Title) + " - " + v.URLHash() + ".md"
 }
 
 func (v Vacancy) EncodeToMD() []byte {

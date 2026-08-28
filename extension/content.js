@@ -2,8 +2,6 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// cyrb53: fast, deterministic, non-cryptographic — good enough to detect text
-// changes without storing the full vacancy text in browser.storage.local.
 function hashString(str) {
   let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
   for (let i = 0; i < str.length; i++) {
@@ -219,7 +217,7 @@ function createEditorPanel() {
   return { panel, status, textarea, commitBtn, closeBtn };
 }
 
-async function openEditorPanel(editor, id) {
+async function openEditorPanel(editor, company, title) {
   editor.panel.style.display = "flex";
   editor.textarea.disabled = true;
   editor.commitBtn.disabled = true;
@@ -228,7 +226,7 @@ async function openEditorPanel(editor, id) {
   editor.status.textContent = await t("editorLoading");
 
   try {
-    const res = await browser.runtime.sendMessage({ type: "getServerVacancyRaw", id });
+    const res = await browser.runtime.sendMessage({ type: "getServerVacancyRaw", company, title });
     if (!res.exists) {
       editor.status.textContent = await t("editorNotFound");
       return;
@@ -242,12 +240,13 @@ async function openEditorPanel(editor, id) {
   }
 }
 
-async function commitEditorChanges(editor, id, adapter, serverBtn, previewBtn) {
+async function commitEditorChanges(editor, company, title, adapter, serverBtn, previewBtn) {
   editor.commitBtn.disabled = true;
   editor.status.textContent = await t("editorCommitting");
 
   try {
-    const { vacancy } = await browser.runtime.sendMessage({ type: "saveVacancyRaw", id, text: editor.textarea.value });
+    const { vacancy } = await browser.runtime.sendMessage({ type: "saveVacancyRaw", text: editor.textarea.value });
+    const id = `${company} - ${title}`;
     const hash = hashString(JSON.stringify({
       id, title: vacancy.title, company: vacancy.company, description: vacancy.description, mails: vacancy.mails,
     }));
@@ -268,7 +267,7 @@ function setServerPreviewButton(previewBtn, entry, onOpen) {
     return;
   }
   previewBtn.style.display = "block";
-  previewBtn.onclick = () => onOpen(entry.id);
+  previewBtn.onclick = () => onOpen();
 }
 
 function serverPayload(adapter) {
@@ -290,7 +289,7 @@ async function refreshServerButtonState(adapter, button, previewBtn, editor) {
   const hash = hashString(JSON.stringify(payload));
   const serverSavedVacancies = await getServerSavedVacancies();
   const entry = serverSavedVacancies[location.href];
-  const onOpen = (id) => openEditorPanel(editor, id);
+  const onOpen = () => openEditorPanel(editor, payload.company, payload.title);
 
   if (entry && entry.hash === hash) {
     button.textContent = await t("alreadySavedToServer");
@@ -309,7 +308,7 @@ async function refreshServerButtonState(adapter, button, previewBtn, editor) {
     setServerPreviewButton(previewBtn, null);
   }
 
-  editor.commitBtn.onclick = () => commitEditorChanges(editor, payload.id, adapter, button, previewBtn);
+  editor.commitBtn.onclick = () => commitEditorChanges(editor, payload.company, payload.title, adapter, button, previewBtn);
 }
 
 async function saveCurrentVacancyToServer(adapter, button, previewBtn, editor) {

@@ -2,9 +2,9 @@ package main
 
 import (
 	"errors"
-	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 var ErrNotFound = errors.New("vacancy not found")
@@ -78,22 +78,30 @@ func (s *Store) Check(filename string) (bool, error) {
 	return false, err
 }
 
-func (s *Store) FindLike(fileList *[]string, partsOfFilename []string) error {
-	seen := make(map[string]bool)
-	fsys := os.DirFS(s.Path)
+func (s *Store) FindLike(fileList *[]string, filter QueryVacancyRequest) error {
+	entries, err := os.ReadDir(s.Path)
+	if errors.Is(err, os.ErrNotExist) {
+		return NotMatchingFilesFound
+	}
+	if err != nil {
+		return err
+	}
 
-	for _, part := range partsOfFilename {
-		matches, err := fs.Glob(fsys, "*"+part+"*")
-		if err != nil {
-			return err
+	company := strings.ToLower(filter.Company)
+	title := strings.ToLower(filter.Title)
+
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".md" {
+			continue
 		}
-		for _, m := range matches {
-			if seen[m] {
-				continue
-			}
-			seen[m] = true
-			*fileList = append(*fileList, m)
+		name := strings.ToLower(entry.Name())
+		if company != "" && !strings.Contains(name, company) {
+			continue
 		}
+		if title != "" && !strings.Contains(name, title) {
+			continue
+		}
+		*fileList = append(*fileList, entry.Name())
 	}
 
 	if len(*fileList) == 0 {
