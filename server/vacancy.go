@@ -35,3 +35,20 @@ func (v Vacancy) EncodeToMD() []byte {
 	b.WriteString("\n")
 	return []byte(b.String())
 }
+
+func ParseVacancy(raw []byte) Vacancy {
+	header, description, _ := strings.Cut(string(raw), "\n\n")
+
+	var v Vacancy
+	for _, line := range strings.Split(header, "\n") {
+		if rest, ok := strings.CutPrefix(line, "Status: "); ok {
+			v.Status = rest
+		} else if rest, ok := strings.CutPrefix(line, "Title: "); ok {
+			v.Title = rest
+		} else if rest, ok := strings.CutPrefix(line, "Company: "); ok {
+			v.Company = rest
+		}
+	}
+	v.Description = strings.TrimRight(description, "\n")
+	return v
+}

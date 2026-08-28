@@ -16,6 +16,60 @@ async function backendFetch(path, options) {
   return res;
 }
 
+function backendQuery(path, body) {
+  return backendFetch(path, {
+    method: "QUERY",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+// The server has no lookup-by-id endpoint: it addresses vacancies by a
+// filename it derives from company + title + a hash of the description.
+// We find the current file by searching for the stable "company - title"
+// prefix, then fetch that file's own filename.
+async function findServerVacancy(id) {
+  const listRes = await backendQuery("/vacancies/list", { filename_filter: [id] });
+  if (listRes.status === 404) return null;
+
+  const filenames = await listRes.json();
+  const filename = filenames.find((name) => name.startsWith(`${id} - `)) ?? filenames[0];
+  if (!filename) return null;
+
+  const vacancyRes = await backendFetch(`/vacancies/${encodeURIComponent(filename)}`);
+  if (vacancyRes.status === 404) return null;
+  return { filename, vacancy: await vacancyRes.json() };
+}
+
+function saveVacancy(vacancy) {
+  return backendFetch("/vacancies", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(vacancy),
+  });
+}
+
+// Mirrors the server's Vacancy.EncodeToMD/ParseVacancy so the raw text shown
+// in the editor round-trips through the same header + blank-line format.
+function encodeVacancyRaw(v) {
+  return `Status: ${v.status}\nTitle: ${v.title}\nCompany: ${v.company}\n\n${v.description}\n`;
+}
+
+function decodeVacancyRaw(text) {
+  const sep = "\n\n";
+  const idx = text.indexOf(sep);
+  const header = idx === -1 ? text : text.slice(0, idx);
+  const description = idx === -1 ? "" : text.slice(idx + sep.length).replace(/\n$/, "");
+
+  const vacancy = { status: "", title: "", company: "", description };
+  for (const line of header.split("\n")) {
+    if (line.startsWith("Status: ")) vacancy.status = line.slice("Status: ".length);
+    else if (line.startsWith("Title: ")) vacancy.title = line.slice("Title: ".length);
+    else if (line.startsWith("Company: ")) vacancy.company = line.slice("Company: ".length);
+  }
+  return vacancy;
+}
+
 browser.runtime.onMessage.addListener(async (msg) => {
   if (msg.type === "save") {
     const blob = new Blob([msg.content], { type: "text/markdown" });
@@ -49,34 +103,25 @@ browser.runtime.onMessage.addListener(async (msg) => {
   }
 
   if (msg.type === "getServerVacancyRaw") {
-    const res = await backendFetch(`/vacancies/${encodeURIComponent(msg.id)}/raw`);
-    if (res.status === 404) return { exists: false };
-    return { exists: true, text: await res.text() };
+    const found = await findServerVacancy(msg.id);
+    if (!found) return { exists: false };
+    return { exists: true, text: encodeVacancyRaw(found.vacancy) };
   }
 
   if (msg.type === "saveVacancyRaw") {
-    const res = await backendFetch(`/vacancies/${encodeURIComponent(msg.id)}/raw`, {
-      method: "PUT",
-      headers: { "Content-Type": "text/markdown" },
-      body: msg.text,
-    });
+    const res = await saveVacancy(decodeVacancyRaw(msg.text));
     return { vacancy: await res.json() };
   }
 
   if (msg.type === "saveToServer") {
-    const existing = await backendFetch(`/vacancies/${encodeURIComponent(msg.id)}`);
-    const status = existing.status === 404 ? "new" : (await existing.json()).status;
+    const found = await findServerVacancy(msg.id);
+    const status = found ? found.vacancy.status : "new";
 
-    await backendFetch(`/vacancies/${encodeURIComponent(msg.id)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status,
-        title: msg.title,
-        company: msg.company,
-        mails: msg.mails,
-        description: msg.description,
-      }),
+    await saveVacancy({
+      status,
+      title: msg.title,
+      company: msg.company,
+      description: msg.description,
     });
     return { ok: true };
   }

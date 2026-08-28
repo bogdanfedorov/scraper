@@ -62,7 +62,7 @@ func handleSaveVacancy(w http.ResponseWriter, r *http.Request) {
 }
 
 type QueryVacancyRequest struct {
-	fileNameFilter []string `json:"filename_filter"`
+	FileNameFilter []string `json:"filename_filter"`
 }
 
 func handleListVacancies(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +78,7 @@ func handleListVacancies(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var filenames []string
-	if err := store.FindLike(&filenames, q.fileNameFilter); err != nil {
+	if err := store.FindLike(&filenames, q.FileNameFilter); err != nil {
 		if errors.Is(err, NotMatchingFilesFound) {
 			writeError(w, http.StatusNotFound, err)
 		} else {
@@ -91,7 +91,7 @@ func handleListVacancies(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGetVacancy(w http.ResponseWriter, r *http.Request) {
-	filename := r.URL.Path[len("/vacancies/"):]
+	filename := r.PathValue("filename")
 	var store Store
 	if err := resolveDataDir(&store.Path, r); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -121,7 +121,7 @@ func newMux() *http.ServeMux {
 
 	mux.HandleFunc("PUT /vacancies", handleSaveVacancy)
 	mux.HandleFunc("QUERY /vacancies/list", handleListVacancies)
-	mux.HandleFunc("GET /vacancies/<filename>", handleGetVacancy)
+	mux.HandleFunc("GET /vacancies/{filename}", handleGetVacancy)
 	return mux
 }
 
