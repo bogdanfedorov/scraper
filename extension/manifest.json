@@ -5,7 +5,7 @@
   "description": "Зберігає вакансії з jobs.dou.ua у Markdown файли",
   "permissions": ["downloads", "storage", "https://jobs.dou.ua/*"],
   "background": {
-    "scripts": ["background.js"]
+    "scripts": ["i18n.js", "background.js"]
   },
   "options_ui": {
     "page": "options.html",

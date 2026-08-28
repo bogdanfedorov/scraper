@@ -4,6 +4,9 @@ const I18N_STRINGS = {
     optionsTitle: "Vacancies Saver — налаштування",
     adaptersHeading: "Адаптери сайтів",
     languageLabel: "Мова",
+    savePathLabel: "Папка для збереження",
+    savePathPlaceholder: "dou-vacancies",
+    savePathHint: "Зберігається як підпапка всередині папки Завантажень браузера (браузери не дозволяють розширенням писати в довільне місце на диску).",
     saveButton: "💾 Зберегти вакансію в MD",
     saving: "Зберігаю...",
     saved: "Збережено ✅",
@@ -16,6 +19,9 @@ const I18N_STRINGS = {
     optionsTitle: "Vacancies Saver — settings",
     adaptersHeading: "Site adapters",
     languageLabel: "Language",
+    savePathLabel: "Save folder",
+    savePathPlaceholder: "dou-vacancies",
+    savePathHint: "Saved as a subfolder inside the browser's Downloads folder (extensions can't write to an arbitrary location on disk).",
     saveButton: "💾 Save vacancy to MD",
     saving: "Saving...",
     saved: "Saved ✅",
@@ -27,6 +33,26 @@ const I18N_STRINGS = {
 };
 
 const I18N_DEFAULT_LOCALE = "uk";
+const DEFAULT_SAVE_PATH = "dou-vacancies";
+
+function sanitizeSavePath(path) {
+  const cleaned = String(path || "")
+    .replace(/\\/g, "/")
+    .split("/")
+    .map((part) => part.replace(/[\\?:"<>|*]/g, "").trim())
+    .filter((part) => part && part !== "." && part !== "..")
+    .join("/");
+  return cleaned || DEFAULT_SAVE_PATH;
+}
+
+async function getSavePath() {
+  const { savePath } = await browser.storage.local.get("savePath");
+  return sanitizeSavePath(savePath);
+}
+
+async function setSavePath(path) {
+  await browser.storage.local.set({ savePath: sanitizeSavePath(path) });
+}
 
 async function getLocale() {
   const { locale } = await browser.storage.local.get("locale");
