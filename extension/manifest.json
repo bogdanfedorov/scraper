@@ -14,7 +14,7 @@
   "content_scripts": [
     {
       "matches": ["https://jobs.dou.ua/*"],
-      "js": ["sites/_registry.js", "sites/dou.js", "content.js"],
+      "js": ["i18n.js", "sites/_registry.js", "sites/dou.js", "content.js"],
       "run_at": "document_idle"
     }
   ],

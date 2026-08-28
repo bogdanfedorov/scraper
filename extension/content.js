@@ -77,19 +77,19 @@ async function findEnabledAdapter() {
 
 async function saveCurrentVacancy(adapter, button) {
   button.disabled = true;
-  button.textContent = "Зберігаю...";
+  button.textContent = await t("saving");
 
   const { filename, content } = adapter.extractVacancy();
   if (!content) {
-    button.textContent = "Не знайшов опис ❌";
+    button.textContent = await t("noContent");
     button.disabled = false;
     return;
   }
 
   await browser.runtime.sendMessage({ type: "save", filename, content });
-  button.textContent = "Збережено ✅";
-  setTimeout(() => {
-    button.textContent = "💾 Зберегти вакансію в MD";
+  button.textContent = await t("saved");
+  setTimeout(async () => {
+    button.textContent = await t("saveButton");
     button.disabled = false;
   }, 1500);
 }
@@ -106,14 +106,14 @@ async function loadAllVacancies(adapter, button) {
   while ((btn = findMoreButton(adapter))) {
     btn.click();
     count++;
-    button.textContent = `Довантажую (${count})...`;
+    button.textContent = await t("loadingMore", count);
     await sleep(1200);
   }
-  button.textContent = "Готово, більше немає";
+  button.textContent = await t("doneNoMore");
   button.disabled = false;
 }
 
-function addButton(adapter) {
+async function addButton(adapter) {
   const btn = document.createElement("button");
   btn.style.cssText =
     "position:fixed;top:80px;right:20px;z-index:99999;padding:10px 16px;" +
@@ -121,10 +121,10 @@ function addButton(adapter) {
     "font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3);";
 
   if (adapter.isListingPage()) {
-    btn.textContent = "⬇ Довантажити всі вакансії";
+    btn.textContent = await t("loadMoreButton");
     btn.addEventListener("click", () => loadAllVacancies(adapter, btn));
   } else {
-    btn.textContent = "💾 Зберегти вакансію в MD";
+    btn.textContent = await t("saveButton");
     btn.addEventListener("click", () => saveCurrentVacancy(adapter, btn));
   }
 
@@ -133,5 +133,5 @@ function addButton(adapter) {
 
 (async () => {
   const adapter = await findEnabledAdapter();
-  if (adapter) addButton(adapter);
+  if (adapter) await addButton(adapter);
 })();
