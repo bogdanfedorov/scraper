@@ -7,6 +7,15 @@ async function findSavedDownload(filename) {
   );
 }
 
+async function backendFetch(path, options) {
+  const backendUrl = await getBackendUrl();
+  const res = await fetch(`${backendUrl}${path}`, options);
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  return res;
+}
+
 browser.runtime.onMessage.addListener(async (msg) => {
   if (msg.type === "save") {
     const blob = new Blob([msg.content], { type: "text/markdown" });
@@ -36,6 +45,30 @@ browser.runtime.onMessage.addListener(async (msg) => {
     if (!match) return { ok: false };
 
     await browser.downloads.show(match.id);
+    return { ok: true };
+  }
+
+  if (msg.type === "getServerVacancy") {
+    const res = await backendFetch(`/vacancies/${encodeURIComponent(msg.id)}`);
+    if (res.status === 404) return { exists: false };
+    return { exists: true, vacancy: await res.json() };
+  }
+
+  if (msg.type === "saveToServer") {
+    const existing = await backendFetch(`/vacancies/${encodeURIComponent(msg.id)}`);
+    const status = existing.status === 404 ? "new" : (await existing.json()).status;
+
+    await backendFetch(`/vacancies/${encodeURIComponent(msg.id)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status,
+        title: msg.title,
+        company: msg.company,
+        mails: msg.mails,
+        description: msg.description,
+      }),
+    });
     return { ok: true };
   }
 });

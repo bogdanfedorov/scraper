@@ -32,6 +32,21 @@ async function fileStillExists(filename) {
   return exists;
 }
 
+async function getServerSavedVacancies() {
+  const { serverSavedVacancies = {} } = await browser.storage.local.get("serverSavedVacancies");
+  return serverSavedVacancies;
+}
+
+async function markVacancyServerSaved(url, { id, hash }) {
+  const serverSavedVacancies = await getServerSavedVacancies();
+  serverSavedVacancies[url] = { id, hash, savedAt: Date.now() };
+  await browser.storage.local.set({ serverSavedVacancies });
+}
+
+function extractMails(text) {
+  return [...new Set(text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) || [])];
+}
+
 function sanitizeFilename(name) {
   return name.replace(/[\\/*?:"<>|]/g, "").replace(/\s+/g, " ").trim().slice(0, 150);
 }
@@ -111,8 +126,15 @@ const SAVE_BUTTON_COLORS = {
   saved: "#95a5a6",
 };
 
-function setSaveButtonStyle(button, colorKey) {
-  button.style.background = SAVE_BUTTON_COLORS[colorKey];
+const SERVER_BUTTON_COLORS = {
+  unsaved: "#3498db",
+  changed: "#f39c12",
+  saved: "#95a5a6",
+  error: "#e74c3c",
+};
+
+function setButtonStyle(button, colors, colorKey) {
+  button.style.background = colors[colorKey];
   button.style.cursor = colorKey === "saved" ? "default" : "pointer";
 }
 
@@ -130,7 +152,7 @@ async function refreshSaveButtonState(adapter, button, previewButton) {
   const { content } = adapter.extractVacancy();
   if (!content) {
     button.textContent = await t("noContent");
-    setSaveButtonStyle(button, "unsaved");
+    setButtonStyle(button, SAVE_BUTTON_COLORS, "unsaved");
     button.disabled = true;
     setPreviewButton(previewButton, null);
     return;
@@ -142,19 +164,72 @@ async function refreshSaveButtonState(adapter, button, previewButton) {
 
   if (onDisk && entry.hash === hashString(content)) {
     button.textContent = await t("alreadySaved");
-    setSaveButtonStyle(button, "saved");
+    setButtonStyle(button, SAVE_BUTTON_COLORS, "saved");
     button.disabled = true;
     setPreviewButton(previewButton, entry);
   } else if (onDisk) {
     button.textContent = await t("changedSaveButton");
-    setSaveButtonStyle(button, "changed");
+    setButtonStyle(button, SAVE_BUTTON_COLORS, "changed");
     button.disabled = false;
     setPreviewButton(previewButton, entry);
   } else {
     button.textContent = await t("saveButton");
-    setSaveButtonStyle(button, "unsaved");
+    setButtonStyle(button, SAVE_BUTTON_COLORS, "unsaved");
     button.disabled = false;
     setPreviewButton(previewButton, null);
+  }
+}
+
+function serverPayload(adapter) {
+  const { filename, content, title, company } = adapter.extractVacancy();
+  if (!content) return null;
+  return { id: filename, title, company, description: content, mails: extractMails(content) };
+}
+
+async function refreshServerButtonState(adapter, button) {
+  const payload = serverPayload(adapter);
+  if (!payload) {
+    button.textContent = await t("noContent");
+    setButtonStyle(button, SERVER_BUTTON_COLORS, "unsaved");
+    button.disabled = true;
+    return;
+  }
+
+  const hash = hashString(JSON.stringify(payload));
+  const serverSavedVacancies = await getServerSavedVacancies();
+  const entry = serverSavedVacancies[location.href];
+
+  if (entry && entry.hash === hash) {
+    button.textContent = await t("alreadySavedToServer");
+    setButtonStyle(button, SERVER_BUTTON_COLORS, "saved");
+    button.disabled = true;
+  } else if (entry) {
+    button.textContent = await t("changedSaveToServerButton");
+    setButtonStyle(button, SERVER_BUTTON_COLORS, "changed");
+    button.disabled = false;
+  } else {
+    button.textContent = await t("saveToServerButton");
+    setButtonStyle(button, SERVER_BUTTON_COLORS, "unsaved");
+    button.disabled = false;
+  }
+}
+
+async function saveCurrentVacancyToServer(adapter, button) {
+  const payload = serverPayload(adapter);
+  if (!payload) return;
+
+  button.disabled = true;
+  button.textContent = await t("savingToServer");
+
+  try {
+    await browser.runtime.sendMessage({ type: "saveToServer", ...payload });
+    await markVacancyServerSaved(location.href, { id: payload.id, hash: hashString(JSON.stringify(payload)) });
+    button.textContent = await t("savedToServer");
+    setTimeout(() => refreshServerButtonState(adapter, button), 1500);
+  } catch (err) {
+    button.textContent = `${await t("serverSaveError")}: ${err.message}`;
+    setButtonStyle(button, SERVER_BUTTON_COLORS, "error");
+    button.disabled = false;
   }
 }
 
@@ -221,8 +296,21 @@ async function addButton(adapter) {
     saveCurrentVacancy(adapter, btn, previewBtn);
   });
 
+  const serverBtn = document.createElement("button");
+  serverBtn.style.cssText =
+    "position:fixed;top:180px;right:20px;z-index:99999;padding:10px 16px;" +
+    "color:#fff;border:none;border-radius:6px;cursor:pointer;" +
+    "font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3);";
+
+  await refreshServerButtonState(adapter, serverBtn);
+  serverBtn.addEventListener("click", () => {
+    if (serverBtn.disabled) return;
+    saveCurrentVacancyToServer(adapter, serverBtn);
+  });
+
   document.body.appendChild(btn);
   document.body.appendChild(previewBtn);
+  document.body.appendChild(serverBtn);
 }
 
 (async () => {
