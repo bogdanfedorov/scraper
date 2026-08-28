@@ -2,6 +2,36 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// cyrb53: fast, deterministic, non-cryptographic — good enough to detect text
+// changes without storing the full vacancy text in browser.storage.local.
+function hashString(str) {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+async function getSavedVacancies() {
+  const { savedVacancies = {} } = await browser.storage.local.get("savedVacancies");
+  return savedVacancies;
+}
+
+async function markVacancySaved(url, { filename, hash }) {
+  const savedVacancies = await getSavedVacancies();
+  savedVacancies[url] = { filename, hash, savedAt: Date.now() };
+  await browser.storage.local.set({ savedVacancies });
+}
+
+async function fileStillExists(filename) {
+  const { exists } = await browser.runtime.sendMessage({ type: "checkFileExists", filename });
+  return exists;
+}
+
 function sanitizeFilename(name) {
   return name.replace(/[\\/*?:"<>|]/g, "").replace(/\s+/g, " ").trim().slice(0, 150);
 }
@@ -75,7 +105,60 @@ async function findEnabledAdapter() {
   return candidate;
 }
 
-async function saveCurrentVacancy(adapter, button) {
+const SAVE_BUTTON_COLORS = {
+  unsaved: "#2ecc71",
+  changed: "#f39c12",
+  saved: "#95a5a6",
+};
+
+function setSaveButtonStyle(button, colorKey) {
+  button.style.background = SAVE_BUTTON_COLORS[colorKey];
+  button.style.cursor = colorKey === "saved" ? "default" : "pointer";
+}
+
+function setPreviewButton(previewButton, entry) {
+  if (!entry) {
+    previewButton.style.display = "none";
+    previewButton.onclick = null;
+    return;
+  }
+  previewButton.style.display = "block";
+  previewButton.onclick = () => browser.runtime.sendMessage({ type: "openFile", filename: entry.filename });
+}
+
+async function refreshSaveButtonState(adapter, button, previewButton) {
+  const { content } = adapter.extractVacancy();
+  if (!content) {
+    button.textContent = await t("noContent");
+    setSaveButtonStyle(button, "unsaved");
+    button.disabled = true;
+    setPreviewButton(previewButton, null);
+    return;
+  }
+
+  const savedVacancies = await getSavedVacancies();
+  const entry = savedVacancies[location.href];
+  const onDisk = entry ? await fileStillExists(entry.filename) : false;
+
+  if (onDisk && entry.hash === hashString(content)) {
+    button.textContent = await t("alreadySaved");
+    setSaveButtonStyle(button, "saved");
+    button.disabled = true;
+    setPreviewButton(previewButton, entry);
+  } else if (onDisk) {
+    button.textContent = await t("changedSaveButton");
+    setSaveButtonStyle(button, "changed");
+    button.disabled = false;
+    setPreviewButton(previewButton, entry);
+  } else {
+    button.textContent = await t("saveButton");
+    setSaveButtonStyle(button, "unsaved");
+    button.disabled = false;
+    setPreviewButton(previewButton, null);
+  }
+}
+
+async function saveCurrentVacancy(adapter, button, previewButton) {
   button.disabled = true;
   button.textContent = await t("saving");
 
@@ -87,11 +170,9 @@ async function saveCurrentVacancy(adapter, button) {
   }
 
   await browser.runtime.sendMessage({ type: "save", filename, content });
+  await markVacancySaved(location.href, { filename, hash: hashString(content) });
   button.textContent = await t("saved");
-  setTimeout(async () => {
-    button.textContent = await t("saveButton");
-    button.disabled = false;
-  }, 1500);
+  setTimeout(() => refreshSaveButtonState(adapter, button, previewButton), 1500);
 }
 
 function findMoreButton(adapter) {
@@ -123,12 +204,25 @@ async function addButton(adapter) {
   if (adapter.isListingPage()) {
     btn.textContent = await t("loadMoreButton");
     btn.addEventListener("click", () => loadAllVacancies(adapter, btn));
-  } else {
-    btn.textContent = await t("saveButton");
-    btn.addEventListener("click", () => saveCurrentVacancy(adapter, btn));
+    document.body.appendChild(btn);
+    return;
   }
 
+  const previewBtn = document.createElement("button");
+  previewBtn.style.cssText =
+    "position:fixed;top:130px;right:20px;z-index:99999;padding:8px 14px;display:none;" +
+    "background:#3498db;color:#fff;border:none;border-radius:6px;cursor:pointer;" +
+    "font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.3);";
+  previewBtn.textContent = await t("previewButton");
+
+  await refreshSaveButtonState(adapter, btn, previewBtn);
+  btn.addEventListener("click", () => {
+    if (btn.disabled) return;
+    saveCurrentVacancy(adapter, btn, previewBtn);
+  });
+
   document.body.appendChild(btn);
+  document.body.appendChild(previewBtn);
 }
 
 (async () => {
