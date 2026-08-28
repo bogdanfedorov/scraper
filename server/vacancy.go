@@ -11,18 +11,19 @@ type Vacancy struct {
 	Status      string `json:"status"`
 	Title       string `json:"title"`
 	Company     string `json:"company"`
+	URL         string `json:"url"`
 	Description string `json:"description"`
 }
 
-func (v Vacancy) DescriptionHash() string {
+func (v Vacancy) URLHash() string {
 	hasher := sha256.New()
-	hasher.Write([]byte(v.Description))
+	hasher.Write([]byte(v.URL))
 	hashBytes := hasher.Sum(nil)
 	return hex.EncodeToString(hashBytes)
 }
 
 func (v Vacancy) Filename() string {
-	return v.Company + " - " + v.Title + " - " + v.DescriptionHash() + ".md"
+	return v.Company + " - " + v.Title + " - " + v.URLHash() + ".md"
 }
 
 func (v Vacancy) EncodeToMD() []byte {
@@ -30,6 +31,7 @@ func (v Vacancy) EncodeToMD() []byte {
 	fmt.Fprintf(&b, "Status: %s\n", v.Status)
 	fmt.Fprintf(&b, "Title: %s\n", v.Title)
 	fmt.Fprintf(&b, "Company: %s\n", v.Company)
+	fmt.Fprintf(&b, "URL: %s\n", v.URL)
 	b.WriteString("\n")
 	b.WriteString(strings.TrimRight(v.Description, "\n"))
 	b.WriteString("\n")
@@ -47,6 +49,8 @@ func ParseVacancy(raw []byte) Vacancy {
 			v.Title = rest
 		} else if rest, ok := strings.CutPrefix(line, "Company: "); ok {
 			v.Company = rest
+		} else if rest, ok := strings.CutPrefix(line, "URL: "); ok {
+			v.URL = rest
 		}
 	}
 	v.Description = strings.TrimRight(description, "\n")

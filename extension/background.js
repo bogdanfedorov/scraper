@@ -52,7 +52,7 @@ function saveVacancy(vacancy) {
 // Mirrors the server's Vacancy.EncodeToMD/ParseVacancy so the raw text shown
 // in the editor round-trips through the same header + blank-line format.
 function encodeVacancyRaw(v) {
-  return `Status: ${v.status}\nTitle: ${v.title}\nCompany: ${v.company}\n\n${v.description}\n`;
+  return `Status: ${v.status}\nTitle: ${v.title}\nCompany: ${v.company}\nURL: ${v.url}\n\n${v.description}\n`;
 }
 
 function decodeVacancyRaw(text) {
@@ -61,11 +61,12 @@ function decodeVacancyRaw(text) {
   const header = idx === -1 ? text : text.slice(0, idx);
   const description = idx === -1 ? "" : text.slice(idx + sep.length).replace(/\n$/, "");
 
-  const vacancy = { status: "", title: "", company: "", description };
+  const vacancy = { status: "", title: "", company: "", url: "", description };
   for (const line of header.split("\n")) {
     if (line.startsWith("Status: ")) vacancy.status = line.slice("Status: ".length);
     else if (line.startsWith("Title: ")) vacancy.title = line.slice("Title: ".length);
     else if (line.startsWith("Company: ")) vacancy.company = line.slice("Company: ".length);
+    else if (line.startsWith("URL: ")) vacancy.url = line.slice("URL: ".length);
   }
   return vacancy;
 }
@@ -121,6 +122,7 @@ browser.runtime.onMessage.addListener(async (msg) => {
       status,
       title: msg.title,
       company: msg.company,
+      url: msg.url,
       description: msg.description,
     });
     return { ok: true };

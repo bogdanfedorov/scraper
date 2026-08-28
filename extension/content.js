@@ -274,7 +274,7 @@ function setServerPreviewButton(previewBtn, entry, onOpen) {
 function serverPayload(adapter) {
   const { filename, content, title, company } = adapter.extractVacancy();
   if (!content) return null;
-  return { id: filename, title, company, description: content, mails: extractMails(content) };
+  return { id: filename, title, company, url: location.href, description: content, mails: extractMails(content) };
 }
 
 async function refreshServerButtonState(adapter, button, previewBtn, editor) {
