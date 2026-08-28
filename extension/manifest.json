@@ -1,0 +1,26 @@
+{
+  "manifest_version": 2,
+  "name": "DOU Vacancies Saver",
+  "version": "1.0",
+  "description": "Зберігає вакансії з jobs.dou.ua у Markdown файли",
+  "permissions": ["downloads", "storage", "https://jobs.dou.ua/*"],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://jobs.dou.ua/*"],
+      "js": ["sites/_registry.js", "sites/dou.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "dou-vacancies-saver@local"
+    }
+  }
+}
