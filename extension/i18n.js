@@ -7,6 +7,13 @@ const I18N_STRINGS = {
     savePathLabel: "Папка для збереження",
     savePathPlaceholder: "dou-vacancies",
     savePathHint: "Зберігається як підпапка всередині папки Завантажень браузера (браузери не дозволяють розширенням писати в довільне місце на диску).",
+    backendUrlLabel: "URL бекенда",
+    backendUrlPlaceholder: "http://localhost:8080",
+    backendUrlHint: "Адреса локального або хмарного vacancy-server.",
+    checkConnectionButton: "Перевірити з'єднання",
+    checkingConnection: "Перевіряю...",
+    connectionOk: "З'єднання успішне ✅",
+    connectionError: "Помилка з'єднання",
     saveButton: "💾 Зберегти вакансію в MD",
     saving: "Зберігаю...",
     saved: "Збережено ✅",
@@ -14,6 +21,19 @@ const I18N_STRINGS = {
     changedSaveButton: "♻️ Текст змінився, зберегти знову",
     previewButton: "📂 Показати збережений файл",
     noContent: "Не знайшов опис ❌",
+    saveToServerButton: "🌐 Зберегти на сервері",
+    savingToServer: "Відправляю на сервер...",
+    savedToServer: "Збережено на сервері ✅",
+    alreadySavedToServer: "Вже на сервері ✅",
+    changedSaveToServerButton: "♻️ Текст змінився, оновити на сервері",
+    serverSaveError: "Помилка сервера",
+    serverPreviewButton: "✏️ Редагувати на сервері",
+    editorLoading: "Завантажую...",
+    editorNotFound: "Файл не знайдено на сервері ❌",
+    editorCommitButton: "✅ Закомітити зміни",
+    editorCloseButton: "✖ Закрити",
+    editorCommitting: "Зберігаю зміни...",
+    editorCommitted: "Закомічено ✅",
     loadMoreButton: "⬇ Довантажити всі вакансії",
     loadingMore: (count) => `Довантажую (${count})...`,
     doneNoMore: "Готово, більше немає",
@@ -25,6 +45,13 @@ const I18N_STRINGS = {
     savePathLabel: "Save folder",
     savePathPlaceholder: "dou-vacancies",
     savePathHint: "Saved as a subfolder inside the browser's Downloads folder (extensions can't write to an arbitrary location on disk).",
+    backendUrlLabel: "Backend URL",
+    backendUrlPlaceholder: "http://localhost:8080",
+    backendUrlHint: "Address of the local or cloud vacancy-server.",
+    checkConnectionButton: "Check connection",
+    checkingConnection: "Checking...",
+    connectionOk: "Connection successful ✅",
+    connectionError: "Connection error",
     saveButton: "💾 Save vacancy to MD",
     saving: "Saving...",
     saved: "Saved ✅",
@@ -32,6 +59,19 @@ const I18N_STRINGS = {
     changedSaveButton: "♻️ Text changed, save again",
     previewButton: "📂 Show saved file",
     noContent: "No description found ❌",
+    saveToServerButton: "🌐 Save to server",
+    savingToServer: "Sending to server...",
+    savedToServer: "Saved to server ✅",
+    alreadySavedToServer: "Already on server ✅",
+    changedSaveToServerButton: "♻️ Text changed, update on server",
+    serverSaveError: "Server error",
+    serverPreviewButton: "✏️ Edit on server",
+    editorLoading: "Loading...",
+    editorNotFound: "File not found on server ❌",
+    editorCommitButton: "✅ Commit changes",
+    editorCloseButton: "✖ Close",
+    editorCommitting: "Committing...",
+    editorCommitted: "Committed ✅",
     loadMoreButton: "⬇ Load all vacancies",
     loadingMore: (count) => `Loading more (${count})...`,
     doneNoMore: "Done, no more left",
@@ -40,6 +80,7 @@ const I18N_STRINGS = {
 
 const I18N_DEFAULT_LOCALE = "uk";
 const DEFAULT_SAVE_PATH = "dou-vacancies";
+const DEFAULT_BACKEND_URL = "http://localhost:8080";
 
 function sanitizeSavePath(path) {
   const cleaned = String(path || "")
@@ -58,6 +99,19 @@ async function getSavePath() {
 
 async function setSavePath(path) {
   await browser.storage.local.set({ savePath: sanitizeSavePath(path) });
+}
+
+function sanitizeBackendUrl(url) {
+  return String(url || "").trim().replace(/\/+$/, "") || DEFAULT_BACKEND_URL;
+}
+
+async function getBackendUrl() {
+  const { backendUrl } = await browser.storage.local.get("backendUrl");
+  return sanitizeBackendUrl(backendUrl);
+}
+
+async function setBackendUrl(url) {
+  await browser.storage.local.set({ backendUrl: sanitizeBackendUrl(url) });
 }
 
 async function getLocale() {

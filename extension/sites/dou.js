@@ -21,6 +21,6 @@ registerAdapter({
     const body = document.getElementsByClassName("l-vacancy")[0];
     const bodyMd = body ? htmlToMarkdown(body).replace(/\n{3,}/g, "\n\n").trim() + "\n" : "";
     const content = bodyMd ? `Посилання (відгукнутись): ${location.href}\n\n${bodyMd}` : "";
-    return { filename: sanitizeFilename(`${company} - ${title}`), content };
+    return { filename: sanitizeFilename(`${company} - ${title}`), content, title, company };
   },
 });
